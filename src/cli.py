@@ -7,13 +7,12 @@ from datetime import datetime
 from typing import Optional
 
 import typer
-from sqlalchemy import func
 
 from src.config import settings
 from src.models.database import SessionLocal
-from src.models.database_models import ResearchArticle
+from src.models.research import article as article_db
 from src.services.news_aggregator import news_aggregator
-from src.services.ollama_service import ollama_service
+from src.services.ollama import ollama_service
 from src.services.slack_service import SlackService
 
 logging.basicConfig(level=logging.INFO)
@@ -37,17 +36,17 @@ def run_research(skill: Optional[str] = None):
             return await news_aggregator.aggregate_daily(db, focus_skill=skill)
 
         count = asyncio.run(run_agg())
-        logger.info(f"✓ Collected {count} articles")
+        logger.info(f"Collected {count} articles")
 
         # Run processing
         async def run_proc():
             return await news_aggregator.process_articles_with_ai(db)
 
         processed = asyncio.run(run_proc())
-        logger.info(f"✓ Processed {processed} articles with AI")
+        logger.info(f"Processed {processed} articles with AI")
 
     except Exception as e:
-        logger.error(f"❌ Research failed: {e}")
+        logger.error(f"Research failed: {e}")
         raise typer.Exit(1)
     finally:
         db.close()
@@ -61,9 +60,10 @@ def test_slack(skill: str = "FastAPI"):
         logger.info(f"� Testing Slack for skill: {skill}")
 
         # Get recent articles (limit to 5 for testing)
-        articles = (
-            db.query(ResearchArticle).filter(ResearchArticle.ai_summary_short != None).order_by(ResearchArticle.created_at.desc()).limit(5).all()
-        )
+        articles, error = article_db.get_recent_summarized_articles(db, limit=5)
+        if error:
+            logger.error(f"Error fetching recent summarized articles: {error}")
+            articles = []
 
         # Convert to dict format expected by slack service
         articles_data = []
@@ -79,8 +79,15 @@ def test_slack(skill: str = "FastAPI"):
             )
 
         # Get basic stats
-        total_articles = db.query(func.count(ResearchArticle.id)).scalar() or 0
-        summarized_count = db.query(func.count(ResearchArticle.id)).filter(ResearchArticle.ai_summary_short != None).scalar() or 0
+        total_articles, error = article_db.calculate_total_articles(db)
+        if error:
+            logger.error(f"Error calculating total articles: {error}")
+            total_articles = 0
+
+        summarized_count, error = article_db.calculate_summarized_articles(db)
+        if error:
+            logger.error(f"Error calculating summarized articles: {error}")
+            summarized_count = 0
 
         stats = {
             "total_articles": total_articles,
@@ -110,7 +117,7 @@ def test_slack(skill: str = "FastAPI"):
             logger.info("   - SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...")
 
     except Exception as e:
-        logger.error(f"❌ Failed to send Slack message: {e}")
+        logger.error(f"Failed to send Slack message: {e}")
         raise typer.Exit(1)
     finally:
         db.close()

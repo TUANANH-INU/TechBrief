@@ -10,7 +10,8 @@ from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 
 from src.models.database_models import ResearchArticle
-from src.services.ollama_service import ollama_service
+from src.services.ollama import ollama_service
+from src.models.research import article as article_db 
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,9 @@ class NewsAggregator:
 
             for entry in feed.entries[:limit]:
                 # Check if article already exists
-                existing = db.query(ResearchArticle).filter(ResearchArticle.url == entry.link).first()
-
-                if not existing:
+                _, error = article_db.get_research_article_by_url(db, entry.link)
+                if error:
+                    logger.warning(f"Article already exists in DB: {entry.link}")
                     article = ResearchArticle(
                         source="hacker_news",
                         title=entry.title,
@@ -58,9 +59,9 @@ class NewsAggregator:
             feed = feedparser.parse(NewsAggregator.RSS_FEEDS["medium"])
 
             for entry in feed.entries[:limit]:
-                existing = db.query(ResearchArticle).filter(ResearchArticle.url == entry.link).first()
-
-                if not existing:
+                _, error = article_db.get_research_article_by_url(db, link=entry.link)
+                if error:
+                    logger.warning(f"Article already exists in DB: {entry.link}")
                     article = ResearchArticle(
                         source="medium",
                         title=entry.title,
@@ -85,9 +86,10 @@ class NewsAggregator:
             data = response.json()
 
             for item in data[:limit]:
-                existing = db.query(ResearchArticle).filter(ResearchArticle.url == item.get("url")).first()
+                _, error = article_db.get_research_article_by_url(db, link=item.get("url"))
 
-                if not existing:
+                if error:
+                    logger.warning(f"Article already exists in DB: {item.get('url')}")
                     article = ResearchArticle(
                         source="dev_to",
                         title=item.get("title", "No title"),
@@ -151,7 +153,7 @@ class NewsAggregator:
             db.add(article)
 
         db.commit()
-        logger.info(f"✓ Aggregated {len(articles_to_add)} new articles")
+        logger.info(f"Aggregated {len(articles_to_add)} new articles")
 
         return len(articles_to_add)
 
@@ -164,9 +166,11 @@ class NewsAggregator:
             Number of articles processed
         """
         # Get unprocessed articles
-        unprocessed = db.query(ResearchArticle).filter(ResearchArticle.ai_summary == None).limit(limit).all()
-
         processed_count = 0
+        unprocessed, error = article_db.get_unprocessed_articles(db, limit)
+        if error:
+            logger.error(f"Error fetching unprocessed articles: {error}")
+            return processed_count
 
         for article in unprocessed:
             try:
@@ -192,12 +196,12 @@ class NewsAggregator:
 
                     db.commit()
                     processed_count += 1
-                    logger.info(f"✓ Processed: {article.title[:50]}...")
+                    logger.info(f"Processed: {article.title[:50]}...")
 
             except Exception as e:
                 logger.error(f"Error processing {article.title}: {e}")
 
-        logger.info(f"✓ Processed {processed_count} articles with AI")
+        logger.info(f"Processed {processed_count} articles with AI")
         return processed_count
 
 

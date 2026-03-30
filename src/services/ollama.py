@@ -1,6 +1,7 @@
 """Ollama local model integration service"""
 
 import logging
+from pydoc import text
 from typing import Optional
 
 import httpx
@@ -8,6 +9,26 @@ import httpx
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def prompt_summarize(text: str) -> str:
+    prompt = f"""Please summarize the following text in 2-3 sentences for a software engineer:
+
+Text:
+{text}
+
+Summary:"""
+
+    return prompt   
+
+def prompt_extract(text: str) -> str:
+    prompt = f"""Extract 3-5 key technical terms or concepts from this text. Return only a comma-separated list.
+
+Text:
+{text}
+
+Keywords:"""
+    return prompt
 
 
 class OllamaService:
@@ -49,21 +70,13 @@ class OllamaService:
             Summary string or None if failed
         """
         model = model or self.model
-
-        prompt = f"""Please summarize the following text in 2-3 sentences for a software engineer:
-
-Text:
-{text}
-
-Summary:"""
-
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(
                     f"{self.base_url}/api/generate",
                     json={
                         "model": model,
-                        "prompt": prompt,
+                        "prompt": prompt_summarize(text),
                         "stream": False,
                     },
                 )
@@ -81,20 +94,12 @@ Summary:"""
     def summarize_sync(self, text: str, model: Optional[str] = None) -> Optional[str]:
         """Synchronous version of summarize"""
         model = model or self.model
-
-        prompt = f"""Please summarize the following text in 2-3 sentences for a software engineer:
-
-Text:
-{text}
-
-Summary:"""
-
         try:
             response = self.client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": model,
-                    "prompt": prompt,
+                    "prompt": prompt_summarize(text),
                     "stream": False,
                 },
                 timeout=120.0,
@@ -122,21 +127,13 @@ Summary:"""
             List of keywords
         """
         model = model or self.model
-
-        prompt = f"""Extract 3-5 key technical terms or concepts from this text. Return only a comma-separated list.
-
-Text:
-{text}
-
-Keywords:"""
-
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     f"{self.base_url}/api/generate",
                     json={
                         "model": model,
-                        "prompt": prompt,
+                        "prompt": prompt_extract(text),
                         "stream": False,
                     },
                 )
@@ -154,20 +151,12 @@ Keywords:"""
     def extract_keywords_sync(self, text: str, model: Optional[str] = None) -> list[str]:
         """Synchronous version of extract_keywords"""
         model = model or self.model
-
-        prompt = f"""Extract 3-5 key technical terms or concepts from this text. Return only a comma-separated list.
-
-Text:
-{text}
-
-Keywords:"""
-
         try:
             response = self.client.post(
                 f"{self.base_url}/api/generate",
                 json={
                     "model": model,
-                    "prompt": prompt,
+                    "prompt": prompt_extract(text),
                     "stream": False,
                 },
                 timeout=60.0,

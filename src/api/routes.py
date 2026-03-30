@@ -1,18 +1,20 @@
-import asyncio
 import logging
-import time
 from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from src.api.reseach import execute_research
+from src.config import settings
 from src.models.database import get_db
-from src.models.database_models import ResearchArticle, ResearchSession
+from src.models.database_models import ResearchSession
+from src.models.research import article as article_db
+from src.models.research import session as session_db
 from src.models.schemas import ResearchArticleResponse, ResearchSessionResponse, ResearchStatsResponse
-from src.services.news_aggregator import news_aggregator
-from src.services.ollama_service import ollama_service
+from src.services.ollama import ollama_service
+from src.services.skills import skill_rotation
+from src.services.slack_service import slack_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/research", tags=["research"])
@@ -28,23 +30,18 @@ async def health_check():
 @router.get("/articles", response_model=List[ResearchArticleResponse])
 async def get_articles(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
     """Get latest research articles"""
-    articles = db.query(ResearchArticle).order_by(ResearchArticle.created_at.desc()).offset(skip).limit(limit).all()
-
+    articles, error = article_db.get_articles_paginated(db, skip, limit)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
     return articles
 
 
 @router.get("/articles/processed", response_model=List[ResearchArticleResponse])
 async def get_processed_articles(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
     """Get processed articles with summaries"""
-    articles = (
-        db.query(ResearchArticle)
-        .filter(ResearchArticle.ai_summary != None)
-        .order_by(ResearchArticle.processed_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
+    articles, error = article_db.get_processed_articles_paginated(db, skip, limit)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
     return articles
 
 
@@ -53,18 +50,18 @@ async def get_today_articles(db: Session = Depends(get_db)):
     """Get articles from today"""
     today = datetime.utcnow().date()
 
-    articles = db.query(ResearchArticle).filter(func.date(ResearchArticle.created_at) == today).order_by(ResearchArticle.created_at.desc()).all()
-
+    articles, error = article_db.get_today_articles(db, today)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
     return articles
 
 
 @router.get("/articles/{article_id}", response_model=ResearchArticleResponse)
 async def get_article(article_id: int, db: Session = Depends(get_db)):
     """Get specific article"""
-    article = db.query(ResearchArticle).filter(ResearchArticle.id == article_id).first()
-
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
+    article, error = article_db.get_article_by_id(db, article_id)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
 
     return article
 
@@ -72,16 +69,32 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
 @router.get("/stats", response_model=ResearchStatsResponse)
 async def get_research_stats(db: Session = Depends(get_db)):
     """Get research statistics"""
-    total = db.query(func.count(ResearchArticle.id)).scalar()
-    summarized = db.query(func.count(ResearchArticle.id)).filter(ResearchArticle.ai_summary != None).scalar()
+    total, error = article_db.calculate_total_articles(db)
+    if error:
+        logger.warning(f"Error calculating total articles: {error}")
+        total = 0
 
-    avg_score = db.query(func.avg(ResearchArticle.relevance_score)).scalar() or 0
+    summarized, error = article_db.calculate_summarized_articles(db)
+    if error:
+        logger.warning(f"Error calculating summarized articles: {error}")
+        summarized = 0
+
+    avg_score, error = article_db.calculate_average_relevance_score(db)
+    if error:
+        logger.warning(f"Error calculating average relevance score: {error}")
+        avg_score = 0.0
 
     today = datetime.utcnow().date()
-    today_count = db.query(func.count(ResearchArticle.id)).filter(func.date(ResearchArticle.created_at) == today).scalar()
+    today_count, error = article_db.calculate_summarized_articles_for_date(db, today)
+    if error:
+        logger.warning(f"Error calculating today's summarized articles: {error}")
+        today_count = 0
 
     # Get top keywords
-    keywords_raw = db.query(ResearchArticle.keywords).filter(ResearchArticle.keywords != None).all()
+    keywords_raw, error = article_db.get_top_keywords(db)
+    if error:
+        logger.warning(f"Error fetching top keywords: {error}")
+        keywords_raw = []
 
     top_keywords = []
     if keywords_raw:
@@ -96,15 +109,18 @@ async def get_research_stats(db: Session = Depends(get_db)):
         keyword_counts = Counter(keyword_list)
         top_keywords = [kw for kw, _ in keyword_counts.most_common(5)]
 
-    latest_session = db.query(ResearchSession).order_by(ResearchSession.session_date.desc()).first()
+    latest_session, error = session_db.get_latest_research_session(db)
+    if error:
+        logger.warning(f"Error fetching latest research session: {error}")
+        latest_session = None
 
     return ResearchStatsResponse(
-        total_articles=total or 0,
-        summarized_count=summarized or 0,
+        total_articles=total,
+        summarized_count=summarized,
         average_relevance_score=float(avg_score),
         top_keywords=top_keywords,
         latest_session_date=latest_session.session_date if latest_session else None,
-        articles_today=today_count or 0,
+        articles_today=today_count,
     )
 
 
@@ -123,30 +139,27 @@ async def run_research(background_tasks: BackgroundTasks, db: Session = Depends(
 @router.get("/sessions", response_model=List[ResearchSessionResponse])
 async def get_sessions(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     """Get research sessions"""
-    sessions = db.query(ResearchSession).order_by(ResearchSession.session_date.desc()).offset(skip).limit(limit).all()
+    sessions, error = session_db.get_research_sessions_paginated(db, skip, limit)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
 
     return sessions
 
 
-@router.post("/send-test-slack")
+@router.post("/send-slack")
 async def send_test_slack(skill: str = "FastAPI", db: Session = Depends(get_db)):
     """Send a test Slack message with sample articles"""
-    from src.config import settings
-    from src.services.skills import skill_rotation
-    from src.services.slack_service import slack_service
 
     if not settings.slack_enabled or not settings.slack_webhook_url:
         raise HTTPException(status_code=400, detail="Slack is not enabled")
 
     # Get recent processed articles
-    articles = db.query(ResearchArticle).filter(ResearchArticle.ai_summary != None).order_by(ResearchArticle.processed_at.desc()).limit(10).all()
-
-    if not articles:
-        raise HTTPException(status_code=404, detail="No processed articles found")
+    articles, error = article_db.get_processed_articles_paginated(db, skip=0, limit=10)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
 
     # Filter by skill
     skill_articles = skill_rotation.filter_articles_by_skill(articles, skill)
-
     if not skill_articles:
         skill_articles = articles  # Fall back to all articles if none match skill
 
@@ -154,45 +167,6 @@ async def send_test_slack(skill: str = "FastAPI", db: Session = Depends(get_db))
     success = slack_service.send_daily_report(skill, skill_articles, 15)
 
     if success:
-        return {"message": "Test Slack message sent successfully", "skill": skill, "article_count": len(skill_articles)}
+        return {"message": "Send Slack message successfully", "skill": skill, "article_count": len(skill_articles)}
     else:
         raise HTTPException(status_code=500, detail="Failed to send Slack message")
-
-
-def execute_research(session_id: int, db: Session):
-    """Background task to execute research"""
-
-    try:
-        session = db.query(ResearchSession).filter(ResearchSession.id == session_id).first()
-
-        if not session:
-            return
-
-        start_time = time.time()
-
-        # Run async aggregation in event loop
-        async def run_aggregation():
-            return await news_aggregator.aggregate_daily(db)
-
-        aggregate_count = asyncio.run(run_aggregation())
-        session.articles_collected = aggregate_count
-
-        # Run async processing in event loop
-        async def run_processing():
-            return await news_aggregator.process_articles_with_ai(db)
-
-        process_count = asyncio.run(run_processing())
-        session.articles_summarized = process_count
-
-        execution_time = int(time.time() - start_time)
-        session.execution_time_seconds = execution_time
-        session.status = "completed"
-
-        db.commit()
-        logger.info(f"✓ Research session {session_id} completed in {execution_time}s")
-
-    except Exception as e:
-        logger.error(f"Research execution failed: {e}")
-        session.status = "failed"
-        session.error_message = str(e)
-        db.commit()

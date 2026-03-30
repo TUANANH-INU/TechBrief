@@ -31,7 +31,7 @@ def cmd_start(args):
         print("   - Ollama: localhost:11434")
         print("   - API: http://localhost:8000/docs")
     else:
-        print("❌ Failed to start services")
+        print("Failed to start services")
         return 1
 
 
@@ -41,7 +41,7 @@ def cmd_stop(args):
     if run_command(["docker-compose", "down"]):
         print("✅ Services stopped!")
     else:
-        print("❌ Failed to stop services")
+        print("Failed to stop services")
         return 1
 
 
@@ -58,7 +58,7 @@ def cmd_research(args):
     result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout)
     if result.returncode != 0:
-        print("❌ Failed to trigger research")
+        print("Failed to trigger research")
         return 1
 
 
@@ -105,11 +105,11 @@ def cmd_test_slack(args):
     """Test Slack webhook"""
     skill = args.skill or "FastAPI"
     print(f"📨 Sending test Slack message for skill: {skill}...")
-    cmd = ["curl", "-X", "POST", f"http://localhost:8000/api/research/send-test-slack?skill={skill}"]
+    cmd = ["curl", "-X", "POST", f"http://localhost:8000/api/research/send-slack?skill={skill}"]
     result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout)
     if result.returncode != 0:
-        print("❌ Failed to send test Slack message")
+        print("Failed to send test Slack message")
         return 1
 
 
@@ -139,7 +139,7 @@ def cmd_init(args):
     try:
         subprocess.run(["docker", "--version"], capture_output=True, check=True)
     except Exception:
-        print("❌ Docker not found. Please install Docker first.")
+        print("Docker not found. Please install Docker first.")
         return 1
 
     # Create .env if not exists
