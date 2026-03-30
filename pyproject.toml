@@ -1,0 +1,58 @@
+[tool.ruff]
+# Exclude folders
+exclude = [
+    "env",
+    "env3",
+    "data",
+    "tests",
+    "third_party",
+    "build",
+    "dist",
+]
+
+# Target code style
+line-length = 180
+target-version = "py310"
+
+lint.select = ["E", "F", "W"]
+
+lint.ignore = [
+    "E711", 
+    "E712", 
+    "W191", 
+    "W293", 
+    "E501",
+]
+
+# Format như black
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "auto"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+exclude = '''
+/(
+    env
+  | env3
+  | data
+  | tests
+  | third_party
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip = [
+    "env",
+    "env3",
+    "data",
+    "tests",
+    "third_party",
+    "build",
+    "dist",
+]
