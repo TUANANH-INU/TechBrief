@@ -13,9 +13,7 @@ from src.models.database import init_db
 from src.schedulers.daily_research import start_scheduler, stop_scheduler
 
 # Configure logging
-logging.basicConfig(
-    level=settings.log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", stream=sys.stdout
-)
+logging.basicConfig(level=settings.log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", stream=sys.stdout)
 
 logger = logging.getLogger(__name__)
 

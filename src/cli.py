@@ -62,11 +62,7 @@ def test_slack(skill: str = "FastAPI"):
 
         # Get recent articles (limit to 5 for testing)
         articles = (
-            db.query(ResearchArticle)
-            .filter(ResearchArticle.ai_summary_short != None)
-            .order_by(ResearchArticle.created_at.desc())
-            .limit(5)
-            .all()
+            db.query(ResearchArticle).filter(ResearchArticle.ai_summary_short != None).order_by(ResearchArticle.created_at.desc()).limit(5).all()
         )
 
         # Convert to dict format expected by slack service
@@ -84,9 +80,7 @@ def test_slack(skill: str = "FastAPI"):
 
         # Get basic stats
         total_articles = db.query(func.count(ResearchArticle.id)).scalar() or 0
-        summarized_count = (
-            db.query(func.count(ResearchArticle.id)).filter(ResearchArticle.ai_summary_short != None).scalar() or 0
-        )
+        summarized_count = db.query(func.count(ResearchArticle.id)).filter(ResearchArticle.ai_summary_short != None).scalar() or 0
 
         stats = {
             "total_articles": total_articles,

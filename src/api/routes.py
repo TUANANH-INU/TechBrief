@@ -53,12 +53,7 @@ async def get_today_articles(db: Session = Depends(get_db)):
     """Get articles from today"""
     today = datetime.utcnow().date()
 
-    articles = (
-        db.query(ResearchArticle)
-        .filter(func.date(ResearchArticle.created_at) == today)
-        .order_by(ResearchArticle.created_at.desc())
-        .all()
-    )
+    articles = db.query(ResearchArticle).filter(func.date(ResearchArticle.created_at) == today).order_by(ResearchArticle.created_at.desc()).all()
 
     return articles
 
@@ -83,9 +78,7 @@ async def get_research_stats(db: Session = Depends(get_db)):
     avg_score = db.query(func.avg(ResearchArticle.relevance_score)).scalar() or 0
 
     today = datetime.utcnow().date()
-    today_count = (
-        db.query(func.count(ResearchArticle.id)).filter(func.date(ResearchArticle.created_at) == today).scalar()
-    )
+    today_count = db.query(func.count(ResearchArticle.id)).filter(func.date(ResearchArticle.created_at) == today).scalar()
 
     # Get top keywords
     keywords_raw = db.query(ResearchArticle.keywords).filter(ResearchArticle.keywords != None).all()
@@ -146,13 +139,7 @@ async def send_test_slack(skill: str = "FastAPI", db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail="Slack is not enabled")
 
     # Get recent processed articles
-    articles = (
-        db.query(ResearchArticle)
-        .filter(ResearchArticle.ai_summary != None)
-        .order_by(ResearchArticle.processed_at.desc())
-        .limit(10)
-        .all()
-    )
+    articles = db.query(ResearchArticle).filter(ResearchArticle.ai_summary != None).order_by(ResearchArticle.processed_at.desc()).limit(10).all()
 
     if not articles:
         raise HTTPException(status_code=404, detail="No processed articles found")

@@ -186,9 +186,7 @@ Examples:
 
     # Logs
     logs_parser = subparsers.add_parser("logs", help="View service logs")
-    logs_parser.add_argument(
-        "service", nargs="?", default="backend", help="Service: backend, postgres, ollama (default: backend)"
-    )
+    logs_parser.add_argument("service", nargs="?", default="backend", help="Service: backend, postgres, ollama (default: backend)")
 
     # Research
     subparsers.add_parser("research", help="Trigger research job manually")

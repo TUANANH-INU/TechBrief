@@ -58,11 +58,7 @@ def scheduled_research_job():
 
             # Get processed articles for today
             processed_articles = (
-                db.query(ResearchArticle)
-                .filter(ResearchArticle.processed_at != None)
-                .order_by(ResearchArticle.processed_at.desc())
-                .limit(10)
-                .all()
+                db.query(ResearchArticle).filter(ResearchArticle.processed_at != None).order_by(ResearchArticle.processed_at.desc()).limit(10).all()
             )
 
             # Filter by skill
@@ -106,9 +102,7 @@ def start_scheduler():
     )
 
     scheduler.start()
-    logger.info(
-        f"✓ Scheduler started - Daily research at {settings.research_schedule_hour:02d}:{settings.research_schedule_minute:02d}"
-    )
+    logger.info(f"✓ Scheduler started - Daily research at {settings.research_schedule_hour:02d}:{settings.research_schedule_minute:02d}")
 
 
 def stop_scheduler():
