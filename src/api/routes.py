@@ -70,29 +70,29 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
 async def get_research_stats(db: Session = Depends(get_db)):
     """Get research statistics"""
     total, error = article_db.calculate_total_articles(db)
-    if error:
+    if total is None or error:
         logger.warning(f"Error calculating total articles: {error}")
         total = 0
 
     summarized, error = article_db.calculate_summarized_articles(db)
-    if error:
+    if summarized is None or error:
         logger.warning(f"Error calculating summarized articles: {error}")
         summarized = 0
 
     avg_score, error = article_db.calculate_average_relevance_score(db)
-    if error:
+    if avg_score is None or error:
         logger.warning(f"Error calculating average relevance score: {error}")
         avg_score = 0.0
 
     today = datetime.utcnow().date()
     today_count, error = article_db.calculate_summarized_articles_for_date(db, today)
-    if error:
+    if today_count is None or error:
         logger.warning(f"Error calculating today's summarized articles: {error}")
         today_count = 0
 
     # Get top keywords
     keywords_raw, error = article_db.get_top_keywords(db)
-    if error:
+    if keywords_raw is None or error:
         logger.warning(f"Error fetching top keywords: {error}")
         keywords_raw = []
 

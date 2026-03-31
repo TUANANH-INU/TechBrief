@@ -35,11 +35,11 @@ def scheduled_research_job():
         today_skill = skill_rotation.get_today_skill()
 
         # Aggregate
-        aggregate_count = news_aggregator.aggregate_daily.__wrapped__(db)
+        aggregate_count = news_aggregator.aggregate_daily(db)
         session.articles_collected = aggregate_count
 
         # Process with AI
-        process_count = news_aggregator.process_articles_with_ai.__wrapped__(db)
+        process_count = news_aggregator.process_articles_with_ai(db)
         session.articles_summarized = process_count
 
         execution_time = int(time.time() - start_time)
