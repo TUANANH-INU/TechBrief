@@ -9,6 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from src.config import settings
 from src.models.database import SessionLocal
 from src.models.database_models import ResearchSession
+from src.models.research import article as article_db
 from src.services.news_aggregator import news_aggregator
 from src.services.skills import skill_rotation
 from src.services.slack_service import slack_service
@@ -34,11 +35,11 @@ def scheduled_research_job():
         today_skill = skill_rotation.get_today_skill()
 
         # Aggregate
-        aggregate_count = news_aggregator.aggregate_daily.__wrapped__(db)
+        aggregate_count = news_aggregator.aggregate_daily(db)
         session.articles_collected = aggregate_count
 
         # Process with AI
-        process_count = news_aggregator.process_articles_with_ai.__wrapped__(db)
+        process_count = news_aggregator.process_articles_with_ai(db)
         session.articles_summarized = process_count
 
         execution_time = int(time.time() - start_time)
@@ -54,28 +55,27 @@ def scheduled_research_job():
 
         # Send to Slack if enabled
         if settings.slack_enabled and settings.slack_webhook_url:
-            from src.models.database_models import ResearchArticle
 
             # Get processed articles for today
-            processed_articles = (
-                db.query(ResearchArticle).filter(ResearchArticle.processed_at != None).order_by(ResearchArticle.processed_at.desc()).limit(10).all()
-            )
+            processed_articles, error = article_db.get_processed_articles_paginated(db, limit=10)
+            if error:
+                logger.error(f"Error fetching processed articles for Slack report: {error}")
+                processed_articles = []
 
             # Filter by skill
             skill_articles = skill_rotation.filter_articles_by_skill(processed_articles, today_skill)
-
             if skill_articles:
                 slack_service.send_daily_report(today_skill, skill_articles, execution_time)
-                logger.info(f"✓ Slack report sent for {today_skill}")
+                logger.info(f"Slack report sent for {today_skill}")
 
     except Exception as e:
-        logger.error(f"❌ Research job failed: {e}", exc_info=True)
+        logger.error(f"Research job failed: {e}", exc_info=True)
         try:
             session.status = "failed"
             session.error_message = str(e)
             db.commit()
         except Exception as db_e:
-            logger.error(f"❌ Failed to update session status: {db_e}", exc_info=True)
+            logger.error(f"Failed to update session status: {db_e}", exc_info=True)
             pass
     finally:
         db.close()
@@ -102,11 +102,11 @@ def start_scheduler():
     )
 
     scheduler.start()
-    logger.info(f"✓ Scheduler started - Daily research at {settings.research_schedule_hour:02d}:{settings.research_schedule_minute:02d}")
+    logger.info(f"Scheduler started - Daily research at {settings.research_schedule_hour:02d}:{settings.research_schedule_minute:02d}")
 
 
 def stop_scheduler():
     """Stop background scheduler"""
     if scheduler.running:
         scheduler.shutdown(wait=False)
-        logger.info("✓ Scheduler stopped")
+        logger.info("Scheduler stopped")

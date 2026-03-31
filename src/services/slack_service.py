@@ -39,11 +39,11 @@ class SlackService:
             response = requests.post(self.webhook_url, json=payload, timeout=10)
             response.raise_for_status()
 
-            logger.info("✓ Slack message sent successfully")
+            logger.info("Slack message sent successfully")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Failed to send Slack message: {e}")
+            logger.error(f"Failed to send Slack message: {e}")
             return False
 
     def send_daily_report(self, skill: str, articles: List, session_duration: int) -> bool:
@@ -138,7 +138,7 @@ class SlackService:
             return self.send_message(text, blocks)
 
         except Exception as e:
-            logger.error(f"❌ Failed to send daily report: {e}")
+            logger.error(f"Failed to send daily report: {e}")
             return False
 
 

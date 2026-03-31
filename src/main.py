@@ -4,6 +4,7 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -25,14 +26,14 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting TechBrief Research System...")
     init_db()
     start_scheduler()
-    logger.info("✓ Application started successfully")
+    logger.info("Application started successfully")
 
     yield
 
     # Shutdown
     logger.info("🛑 Shutting down...")
     stop_scheduler()
-    logger.info("✓ Application stopped")
+    logger.info("Application stopped")
 
 
 # Create FastAPI app
@@ -80,6 +81,5 @@ async def status():
 
 
 if __name__ == "__main__":
-    import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level=settings.log_level.lower())

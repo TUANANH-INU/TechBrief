@@ -113,7 +113,7 @@ GET /api/research/stats
 POST /api/research/run-research
 
 # Send test Slack report
-POST /api/research/send-test-slack?skill=FastAPI
+POST /api/research/send-slack?skill=FastAPI
 
 # Get research sessions/logs
 GET /api/research/sessions
@@ -204,7 +204,7 @@ SLACK_CHANNEL=#techbrief
 **4. Test the integration:**
 ```bash
 # Via API
-curl -X POST "http://localhost:8000/api/research/send-test-slack?skill=FastAPI"
+curl -X POST "http://localhost:8000/api/research/send-slack?skill=FastAPI"
 
 # Via CLI
 ./cli.py test-slack Kubernetes
